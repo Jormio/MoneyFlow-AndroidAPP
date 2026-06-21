@@ -179,3 +179,73 @@ function driveForget() {
   localStorage.removeItem('mf_drive_fileId');
   localStorage.removeItem('mf_drive_fileName');
 }
+
+// ===== Backup glissant (un seul fichier, écrasé à chaque démarrage) =====
+let _backupFileId = localStorage.getItem('mf_drive_backupFileId') || null;
+
+function _backupName() {
+  const base = _fileName.replace(/\.json$/i, '');
+  return base + '_backup.json';
+}
+
+// Récupère le dossier parent du fichier principal
+async function _getParentFolder(token) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${_fileId}?fields=parents`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return (j.parents && j.parents[0]) || null;
+}
+
+// Cherche le fichier de backup existant (par nom, dans le même dossier)
+async function _findBackupFile(token) {
+  const parent = await _getParentFolder(token);
+  const q = encodeURIComponent(`name='${_backupName()}'` + (parent ? ` and '${parent}' in parents` : '') + ' and trashed=false');
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return (j.files && j.files[0] && j.files[0].id) || null;
+}
+
+// Écrit (ou crée si absent) le fichier de backup glissant, écrasé à chaque appel
+async function driveBackupNow(obj) {
+  if (!_fileId) return false;
+  try {
+    const token = await driveGetToken(false);
+    if (!_backupFileId) {
+      _backupFileId = await _findBackupFile(token);
+      if (_backupFileId) localStorage.setItem('mf_drive_backupFileId', _backupFileId);
+    }
+    const body = JSON.stringify(obj);
+    if (_backupFileId) {
+      // Le backup existe déjà : on l'écrase (PATCH media)
+      const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${_backupFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body, signal: AbortSignal.timeout(60000)
+      });
+      if (r.status === 404) { _backupFileId = null; localStorage.removeItem('mf_drive_backupFileId'); return driveBackupNow(obj); }
+      return r.ok;
+    } else {
+      // Pas de backup existant : on le crée dans le même dossier que le fichier principal
+      const parent = await _getParentFolder(token);
+      const metadata = { name: _backupName(), parents: parent ? [parent] : undefined };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([body], { type: 'application/json' }));
+      const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: form, signal: AbortSignal.timeout(60000)
+      });
+      if (!r.ok) return false;
+      const j = await r.json();
+      _backupFileId = j.id;
+      localStorage.setItem('mf_drive_backupFileId', _backupFileId);
+      return true;
+    }
+  } catch (e) { console.warn('driveBackupNow error', e); return false; }
+}

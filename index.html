@@ -255,7 +255,8 @@ body.view-livres .topbar{display:none}
   #ptab-categories > div { grid-template-columns: 1fr !important; }
 
   /* Bandeau livre de compte : passe sur 2 lignes, masque save/backup déjà dans la topbar mobile */
-  #v-livres > div:first-child { flex-wrap: wrap !important; overflow-x: visible !important; }
+  #v-livres > div:first-child { flex-wrap: wrap !important; overflow-x: visible !important;
+    position: sticky !important; top: 0; z-index: 20; }
   #v-livres > div:first-child select#lv-acc { width: 100% !important; order: -1; }
   #v-livres > div:first-child > div[style*="flex:1"] { display: none !important; }
   #v-livres > div:first-child button[onclick="saveData()"],
@@ -3751,7 +3752,10 @@ loadData();  // charge localStorage d'abord (synchrone, immédiat)
 
 (async () => {
   // Charge depuis Google Drive si un fichier a déjà été sélectionné
-  if (driveHasFile()) { await loadFromServer(); }
+  if (driveHasFile()) {
+    await loadFromServer();
+    driveBackupNow(S).catch(()=>{}); // backup glissant de l'état initial, en arrière-plan
+  }
 
   lvBindClick();
   renderSidebar();
