@@ -257,8 +257,7 @@ body.view-livres .topbar{display:none}
   /* Bandeau livre de compte : passe sur 2 lignes, masque save/backup déjà dans la topbar mobile */
   #v-livres > div:first-child { flex-wrap: wrap !important; overflow-x: visible !important;
     position: sticky !important; top: 0; z-index: 20; }
-  #v-livres .lv-acc-header { position: sticky !important; z-index: 19; top: 88px; }
-  #v-livres #lv-period-nav { position: sticky !important; z-index: 18; top: 132px; }
+  #v-livres .lv-sticky-group { position: sticky !important; z-index: 19; }
   #v-livres > div:first-child select#lv-acc { width: 100% !important; order: -1; }
   #v-livres > div:first-child > div[style*="flex:1"] { display: none !important; }
   #v-livres > div:first-child button[onclick="saveData()"],
@@ -1637,6 +1636,7 @@ function _renderLvPage(){
   const periodNav=renderPeriodNav(_lvPeriods,lvPage);
 
   c.innerHTML=`
+    <div class="lv-sticky-group">
     <div class="lv-acc-header" style="display:flex;gap:11px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--brd);flex-wrap:wrap;align-items:center">
       <div style="display:flex;align-items:center;gap:7px"><div class="adot" style="background:${ac.color||'#4f8ef7'};width:9px;height:9px;border-radius:50%"></div>
         <span style="font-weight:600;font-size:13px">${ac.name}</span><span style="font-size:10px;color:var(--txt3)">${ac.banque||''}</span>
@@ -1650,6 +1650,7 @@ function _renderLvPage(){
       ${nRap?`<div class="sc lv-stat-hide" style="padding:6px 12px;border-color:var(--am)"><div class="sl">Non équilibrés</div><div style="font-size:13px;font-weight:700;color:var(--am)">${nRap}</div></div>`:''}
     </div>
     ${periodNav}
+    </div>
     <div id="lv-table-wrap" style="height:calc(100vh - 190px);overflow-y:auto;position:relative">
     ${isMobile?`
       <div class="lv-cards">
@@ -1683,6 +1684,10 @@ function _renderLvPage(){
 
   requestAnimationFrame(()=>{
     const wrap=document.getElementById('lv-table-wrap');if(!wrap)return;
+    // Positionne dynamiquement le groupe sticky (compte+année) juste sous le bandeau outils
+    const toolbar=document.querySelector('#v-livres > div:first-child');
+    const grp=document.querySelector('#v-livres .lv-sticky-group');
+    if(toolbar&&grp) grp.style.top=toolbar.offsetHeight+'px';
     if(lvScrollTxId){
       const row=document.getElementById('tx-row-'+lvScrollTxId);
       if(row){row.scrollIntoView({block:'center'});row.style.outline='2px solid var(--ac)';setTimeout(()=>{row.style.outline='';},1500);}
