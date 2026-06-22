@@ -81,7 +81,6 @@ async function driveOpenPicker() {
   await _ensurePicker();
   return new Promise((resolve) => {
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setMimeTypes('application/json')
       .setIncludeFolders(true)
       .setSelectFolderEnabled(false);
     const picker = new google.picker.PickerBuilder()
