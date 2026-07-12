@@ -10,7 +10,11 @@
 <meta name="theme-color" content="#0f1117">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
 <link rel="icon" href="icon-192.png">
+<!-- Splash screens iOS (portrait) -->
+<link rel="apple-touch-startup-image" href="icon-512.png">
 <title>MoneyFlow</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
@@ -257,7 +261,8 @@ body.view-livres .topbar{display:none}
   /* Bandeau livre de compte : passe sur 2 lignes, masque save/backup déjà dans la topbar mobile */
   #v-livres > div:first-child { flex-wrap: wrap !important; overflow-x: visible !important;
     position: sticky !important; top: 0; z-index: 20; }
-  #v-livres .lv-sticky-group { position: sticky !important; z-index: 19; }
+  #v-livres #lv-search-bar { position: sticky !important; z-index: 19; top: 0; }
+  #v-livres .lv-sticky-group { position: sticky !important; z-index: 18; }
   #v-livres > div:first-child select#lv-acc { width: 100% !important; order: -1; }
   #v-livres > div:first-child > div[style*="flex:1"] { display: none !important; }
   #v-livres > div:first-child button[onclick="saveData()"],
@@ -298,7 +303,23 @@ body.view-livres .topbar{display:none}
            min-width: unset; max-width: 100%; }
 }
 
-/* Bottom navigation bar (mobile uniquement) */
+/* ═══════════════════════════════════════
+   CORRECTIONS SAFARI iOS
+   ═══════════════════════════════════════ */
+/* Fallback hauteur pour Safari iOS qui gère mal dvh */
+@supports (-webkit-touch-callout: none) {
+  body { height: -webkit-fill-available; }
+  #main { min-height: -webkit-fill-available; }
+  /* Modales : forcer scroll interne sur iOS */
+  .md { -webkit-overflow-scrolling: touch; overflow-y: scroll !important; }
+  /* Bottom nav : compenser la barre Safari en bas */
+  #bottom-nav { padding-bottom: max(env(safe-area-inset-bottom, 12px), 12px); }
+  /* Hauteur tableau livre de compte sur iOS */
+  #lv-table-wrap { height: calc(100vh - 248px) !important;
+    -webkit-overflow-scrolling: touch; }
+  /* Modales iOS : position fixed + scroll = bug Safari → on utilise transform */
+  .mo.open .mf { transform: translateZ(0); -webkit-transform: translateZ(0); }
+}
 #bottom-nav {
   display: none;
   position: fixed;
@@ -401,6 +422,10 @@ body.view-livres .topbar{display:none}
   <div class="topbar">
     <div class="tt" id="page-title">Livres de compte</div>
     <div class="tba" id="tba">
+      <div id="sync-indicator" title="Statut de synchronisation Google Drive" style="display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 7px;border-radius:12px;background:var(--bg3);cursor:default;flex-shrink:0">
+        <span id="sync-icon" style="font-size:13px">☁️</span>
+        <span id="sync-label" style="color:var(--txt3)">—</span>
+      </div>
       <button class="btn bgh bsm has-tip" onclick="driveRefresh()" title="Rafraîchir depuis Google Drive"><i class="ti ti-refresh"></i></button>
       <button class="btn bgh bsm has-tip" onclick="saveData()" title="Sauvegarder les donnees"><i class="ti ti-device-floppy"></i></button>
       <button class="btn bgh bsm has-tip" onclick="backupData()" title="Telecharger une sauvegarde JSON"><i class="ti ti-archive"></i></button>
@@ -417,19 +442,22 @@ body.view-livres .topbar{display:none}
         <span style="color:var(--txt3);font-size:10px;flex-shrink:0">&#8594;</span>
         <input type="month" class="fc" style="display:none" id="lv-to">
         <div style="flex:1;min-width:8px"></div>
-        <div style="position:relative;flex-shrink:0" id="lv-search-wrap">
-          <i class="ti ti-search" style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px;pointer-events:none"></i>
-          <input type="search" id="lv-search" placeholder="Rechercher…" autocomplete="off"
-            style="padding:4px 26px 4px 26px;font-size:11px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;color:var(--txt);width:150px;font-family:var(--f);outline:none;transition:border .15s"
-            oninput="lvApplySearch()" onfocus="this.style.borderColor='var(--ac)'" onblur="this.style.borderColor='var(--brd)'">
-          <button id="lv-search-clear" onclick="lvClearSearch()" style="display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:13px;padding:0;line-height:1">&#x2715;</button>
-        </div>
         <button class="btn bpr has-tip" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="openTxMo(document.getElementById('lv-acc')?.value||'')" title="Saisir une nouvelle operation"><i class="ti ti-plus"></i><span>Operation</span></button>
         <button class="btn bam has-tip" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="openGenEchMo()" title="Integrer les echeances du mois"><i class="ti ti-calendar-plus"></i><span>Echeances</span></button>
         <button class="btn bgh has-tip" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="openExportMo()" title="Exporter vers Excel/CSV"><i class="ti ti-table-export"></i><span>Excel</span></button>
         <div style="width:1px;height:18px;background:var(--brd);flex-shrink:0;margin:0 2px"></div>
         <button class="btn bgh has-tip" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="saveData()" title="Sauvegarder les donnees"><i class="ti ti-device-floppy"></i></button>
         <button class="btn bgh has-tip" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="backupData()" title="Telecharger une sauvegarde JSON"><i class="ti ti-archive"></i></button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:var(--bg2);border-bottom:1px solid var(--brd)" id="lv-search-bar">
+        <div class="sw" style="flex:1">
+          <i class="ti ti-search"></i>
+          <input type="search" class="fc si" id="lv-search" placeholder="Rechercher tiers, catégorie, montant…"
+            style="padding:5px 8px 5px 28px;font-size:12px"
+            oninput="lvSearchChange()" onsearch="lvSearchChange()">
+        </div>
+        <button class="btn bse bsm" id="lv-search-clear" style="display:none" onclick="lvSearchClear()"><i class="ti ti-x"></i></button>
+        <span id="lv-search-count" style="font-size:11px;color:var(--txt3);white-space:nowrap"></span>
       </div>
       <div id="lv-content"><div class="es"><i class="ti ti-book"></i><p>Sélectionnez un compte</p></div></div>
     </div>
@@ -491,6 +519,7 @@ body.view-livres .topbar{display:none}
     <div id="v-parametres" class="vw">
       <div class="tabs2">
         <div class="tab act" onclick="showPTab('comptes',this)">Comptes</div>
+        <div class="tab" onclick="showPTab('tiers',this)">Tiers</div>
         <div class="tab" onclick="showPTab('categories',this)">Catégories</div>
         <div class="tab" onclick="showPTab('donnees',this)">Données & Sauvegarde</div>
         <div class="tab" onclick="showPTab('import-money',this)">Import Microsoft Money</div>
@@ -502,6 +531,17 @@ body.view-livres .topbar{display:none}
             <button class="btn bpr bsm" onclick="openAccMo()"><i class="ti ti-plus"></i>Nouveau compte</button>
           </div>
           <div id="p-acc-list"></div>
+        </div>
+
+        <div id="ptab-tiers" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">
+            <div class="sst" style="margin:0">Gestion des tiers</div>
+            <button class="btn bpr bsm" onclick="openTierMo()"><i class="ti ti-plus"></i>Nouveau tiers</button>
+          </div>
+          <div style="margin-bottom:10px">
+            <div class="sw"><i class="ti ti-search"></i><input type="search" class="fc si" id="tiers-search" placeholder="Rechercher…" oninput="renderTiersList()"></div>
+          </div>
+          <div id="p-tiers-list"></div>
         </div>
 
         <div id="ptab-categories" style="display:none">
@@ -938,10 +978,31 @@ const DEF_CATS=[
 let S={accounts:[],transactions:[],echeances:[],categories:[],budgets:{},recMemory:{},lastRec:{},lastSave:null};
 let recData=[];let recDuplicates=[];let moneyBuf=[];let moneyDupBuf=[];let calOff=0;
 let lvSortCol='date';let lvSortAsc=true;
+let lvSearchQuery=''; // recherche active dans le livre de compte
 let lvScrollTxId=null; // track which tx to keep in view after edit
-let _lvSearch=''; // recherche active dans le livre
 let catAcIdx={tx:-1,ech:-1}; // autocomplete selection index
-// ===== STOCKAGE VIA GOOGLE DRIVE =====
+// ===== INDICATEUR DE SYNCHRONISATION =====
+const SYNC_STATE = { idle:'idle', saving:'saving', ok:'ok', error:'error', offline:'offline' };
+let _syncState = SYNC_STATE.idle;
+
+function updateSyncIndicator(state, detail){
+  _syncState = state;
+  const icon = document.getElementById('sync-icon');
+  const label = document.getElementById('sync-label');
+  const wrap = document.getElementById('sync-indicator');
+  if(!icon||!label||!wrap) return;
+  const cfg = {
+    idle:    { i:'☁️',  l:'—',           c:'var(--txt3)',   bg:'var(--bg3)' },
+    saving:  { i:'🔄',  l:'Sync…',       c:'var(--ac)',     bg:'rgba(79,142,247,.1)' },
+    ok:      { i:'✅',  l:'Synchronisé', c:'var(--gn)',     bg:'rgba(16,185,129,.1)' },
+    error:   { i:'⚠️', l:detail||'Erreur sync', c:'var(--rd)', bg:'rgba(220,38,38,.1)' },
+    offline: { i:'📵',  l:'Hors ligne',  c:'var(--am)',     bg:'rgba(245,158,11,.1)' },
+  }[state]||{i:'☁️',l:'—',c:'var(--txt3)',bg:'var(--bg3)'};
+  icon.textContent=cfg.i;
+  label.textContent=cfg.l;
+  label.style.color=cfg.c;
+  wrap.style.background=cfg.bg;
+}
 // Le fichier JSON existant (ex: Comptes_Parents.json) est lu/écrit via l'API Drive v3.
 // Voir drive-sync.js pour driveLoad/driveSave/driveOpenPicker/driveHasFile/driveIsConfigured.
 let _syncPending = false;   // une sauvegarde en attente de réessai
@@ -950,25 +1011,29 @@ let _lostAt      = null;    // timestamp de la perte de sync
 
 // Charge les données depuis Drive (priorité sur localStorage si plus récent)
 async function loadFromServer() {
-  if (!driveHasFile()) return false;
+  updateSyncIndicator('saving');
   try {
-    const data = await driveLoad();
+    // driveLoadAuto retrouve le fichier par nom si le fileId a été effacé (iOS PWA)
+    const data = await driveLoadAuto();
     if (data && data.accounts) {
       const lsRaw = localStorage.getItem('mf4');
       let lsData = null;
       if (lsRaw) try { lsData = JSON.parse(lsRaw); } catch(e) {}
-      const useServer = !lsData || !lsData.lastSave || !data.lastSave || data.lastSave >= lsData.lastSave;
-      if (useServer) {
-        Object.assign(S, data);
-        if (!S.budgets) S.budgets = {};
-        if (!S.recMemory) S.recMemory = {};
-        if (!S.lastRec) S.lastRec = {};
-        if (!S.echeances) S.echeances = [];
-        localStorage.setItem('mf4', JSON.stringify(S));
-      }
+      // Drive est toujours la source de vérité (multi-appareils)
+      // localStorage sert uniquement de cache hors-ligne
+      Object.assign(S, data);
+      if (!S.budgets) S.budgets = {};
+      if (!S.recMemory) S.recMemory = {};
+      if (!S.lastRec) S.lastRec = {};
+      if (!S.echeances) S.echeances = [];
+      try { localStorage.setItem('mf4', JSON.stringify(S)); } catch(e) {}
+      updateSyncIndicator('ok');
       return true;
     }
-  } catch(e) { console.warn('Drive load error', e); }
+  } catch(e) {
+    console.warn('Drive load error', e);
+    updateSyncIndicator('offline');
+  }
   return false;
 }
 
@@ -983,6 +1048,7 @@ function _onSyncLost() {
   if (!_lostAt) {
     _lostAt = Date.now();
     updatePersistUI();
+    updateSyncIndicator('error','Sync Drive interrompue');
     toast('⚠ Synchronisation Drive interrompue — nouvelle tentative…', 'error');
   }
 }
@@ -990,6 +1056,7 @@ function _onSyncLost() {
 // Tentative de reconnexion + renvoi des données en attente
 async function _trySyncReconnect() {
   if (!driveHasFile()) return;
+  updateSyncIndicator('saving');
   const json = JSON.stringify(S);
   const saved = await saveToServer(json);
   if (saved) {
@@ -997,7 +1064,10 @@ async function _trySyncReconnect() {
     _syncPending = false;
     clearInterval(_retryTimer); _retryTimer = null;
     updatePersistUI();
+    updateSyncIndicator('ok');
     toast('✔ Connexion Drive rétablie — données synchronisées', 'success');
+  } else {
+    updateSyncIndicator('error','Retry en cours…');
   }
 }
 
@@ -1007,10 +1077,12 @@ function saveData() {
   const json = JSON.stringify(S);
   try { localStorage.setItem('mf4', json); } catch(e) { console.warn('localStorage quota dépassé'); }
   if (driveHasFile()) {
+    updateSyncIndicator('saving');
     saveToServer(json).then(ok => {
       if (ok) {
         _syncPending = false;
         if (_lostAt) { _lostAt = null; updatePersistUI(); }
+        updateSyncIndicator('ok');
       } else {
         _syncPending = true;
         _onSyncLost();
@@ -1026,6 +1098,7 @@ function saveDataSilent() {
   const json = JSON.stringify(S);
   try { localStorage.setItem('mf4', json); } catch(e) {}
   if (driveHasFile()) {
+    updateSyncIndicator('saving');
     saveToServer(json).then(ok => {
       if (!ok) {
         _syncPending = true; _onSyncLost();
@@ -1033,6 +1106,7 @@ function saveDataSilent() {
       } else {
         _syncPending = false;
         if (_lostAt) { _lostAt = null; updatePersistUI(); }
+        updateSyncIndicator('ok');
       }
     });
   }
@@ -1101,7 +1175,16 @@ function updatePersistUI() {
   }
 }
 
-window.addEventListener('beforeunload', () => { saveDataSilent(); });
+window.addEventListener('beforeunload', (e) => {
+  saveDataSilent();
+  // Avertir si la dernière sync Drive a échoué et qu'il y a des données non sauvegardées
+  if (_syncPending || _lostAt) {
+    const msg = 'Vos modifications n\'ont pas été synchronisées sur Google Drive. Quitter quand même ?';
+    e.preventDefault();
+    e.returnValue = msg;
+    return msg;
+  }
+});
 
 
 function restoreData(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();
@@ -1480,7 +1563,9 @@ function navCatAC(e,pfx){
   if(catAcIdx[pfx]>=0)items[catAcIdx[pfx]].scrollIntoView({block:'nearest'});
 }
 function refreshDataLists(){
+  _initTiers();
   const vals=new Set([
+    ...S.tiers,
     ...S.transactions.map(t=>t.label).filter(Boolean),
     ...S.transactions.map(t=>t.tiers).filter(Boolean),
     ...S.echeances.map(e=>e.name).filter(Boolean),
@@ -1530,13 +1615,16 @@ function renderPeriodNav(periods,curPage){
 }
 
 function renderLv(){
+  lvSearchQuery='';
+  const searchEl=document.getElementById('lv-search');
+  if(searchEl) searchEl.value='';
+  const clearBtn=document.getElementById('lv-search-clear');
+  if(clearBtn) clearBtn.style.display='none';
+  const countEl=document.getElementById('lv-search-count');
+  if(countEl) countEl.textContent='';
   const accId=document.getElementById('lv-acc')?.value;
   const fromEl=document.getElementById('lv-from');const toEl=document.getElementById('lv-to');
   if(!accId){const c=document.getElementById('lv-content');c.innerHTML='<div class="es"><i class="ti ti-book"></i><p>Sélectionnez un compte</p></div>';return;}
-  // Réinitialiser la recherche au changement de compte
-  _lvSearch='';
-  const _si=document.getElementById('lv-search');if(_si)_si.value='';
-  const _sc=document.getElementById('lv-search-clear');if(_sc)_sc.style.display='none';
   const ac=getAcc(accId);_lvAc=ac;
 
   // Toutes les transactions du compte triées chronologiquement pour le solde courant
@@ -1583,23 +1671,11 @@ function _renderLvPage(){
   // Filtrer les transactions sur la période du trimestre sélectionné
   let txs=_lvTxs;
   if(period.from)txs=txs.filter(t=>t.date>=period.from&&t.date<=period.to);
-
-  // Filtre recherche texte / montant
-  if(_lvSearch){
-    const q=_lvSearch.toLowerCase();
-    const qAmt=parseFloat(_lvSearch.replace(',','.'));
-    const hasAmt=!isNaN(qAmt)&&_lvSearch.trim()!=='';
-    txs=txs.filter(t=>{
-      if(t.label&&t.label.toLowerCase().includes(q))return true;
-      if(t.tiers&&t.tiers.toLowerCase().includes(q))return true;
-      if(t.category&&t.category.toLowerCase().includes(q))return true;
-      if(t.subcategory&&t.subcategory.toLowerCase().includes(q))return true;
-      if(t.note&&t.note.toLowerCase().includes(q))return true;
-      if(t.ref&&t.ref.toLowerCase().includes(q))return true;
-      if(hasAmt&&Math.abs(t.amount-qAmt)<0.005)return true;
-      return false;
-    });
-  }
+  // Filtre recherche textuelle/montant
+  if(lvSearchQuery) txs=txs.filter(t=>lvMatchSearch(t,lvSearchQuery));
+  // Mise à jour du compteur de résultats
+  const countEl=document.getElementById('lv-search-count');
+  if(countEl) countEl.textContent=lvSearchQuery?txs.length+' résultat(s)':'';
 
   // soldeDeb = solde cumulé de toutes les transactions AVANT le début de la période
   let soldeDeb=ac.soldeInitial||0;
@@ -1715,8 +1791,15 @@ function _renderLvPage(){
     const wrap=document.getElementById('lv-table-wrap');if(!wrap)return;
     // Positionne dynamiquement le groupe sticky (compte+année) juste sous le bandeau outils
     const toolbar=document.querySelector('#v-livres > div:first-child');
+    const searchBar=document.getElementById('lv-search-bar');
     const grp=document.querySelector('#v-livres .lv-sticky-group');
-    if(toolbar&&grp) grp.style.top=toolbar.offsetHeight+'px';
+    if(toolbar&&grp){
+      const h=toolbar.offsetHeight+(searchBar?searchBar.offsetHeight:0);
+      grp.style.top=h+'px';
+      // Ajuster aussi la hauteur du tableau
+      const wrap=document.getElementById('lv-table-wrap');
+      if(wrap && window.innerWidth<=768) wrap.style.height=`calc(100vh - ${h+grp.offsetHeight+58}px)`;
+    }
     if(lvScrollTxId){
       const row=document.getElementById('tx-row-'+lvScrollTxId);
       if(row){row.scrollIntoView({block:'center'});row.style.outline='2px solid var(--ac)';setTimeout(()=>{row.style.outline='';},1500);}
@@ -1734,23 +1817,35 @@ function lvGoPage(idx){lvPage=idx;_renderLvPage();}
 function lvNextPage(){if(lvPage<_lvPeriods.length-1){lvPage++;_renderLvPage();}}
 function lvPrevPage(){if(lvPage>0){lvPage--;_renderLvPage();}}
 
-function lvSort(col){if(lvSortCol===col)lvSortAsc=!lvSortAsc;else{lvSortCol=col;lvSortAsc=(col==='date');}renderLv();}
-
-function lvApplySearch(){
+function lvSearchChange(){
   const q=(document.getElementById('lv-search')?.value||'').trim();
-  _lvSearch=q;
-  const clrBtn=document.getElementById('lv-search-clear');
-  if(clrBtn)clrBtn.style.display=q?'':'none';
+  lvSearchQuery=q;
+  const clearBtn=document.getElementById('lv-search-clear');
+  if(clearBtn) clearBtn.style.display=q?'':'none';
   _renderLvPage();
 }
-function lvClearSearch(){
-  const inp=document.getElementById('lv-search');
-  if(inp)inp.value='';
-  _lvSearch='';
-  const clrBtn=document.getElementById('lv-search-clear');
-  if(clrBtn)clrBtn.style.display='none';
+function lvSearchClear(){
+  const el=document.getElementById('lv-search');
+  if(el) el.value='';
+  lvSearchQuery='';
+  const clearBtn=document.getElementById('lv-search-clear');
+  if(clearBtn) clearBtn.style.display='none';
+  document.getElementById('lv-search-count').textContent='';
   _renderLvPage();
 }
+// Filtre une transaction selon la requête de recherche
+function lvMatchSearch(t, q){
+  if(!q) return true;
+  const ql=q.toLowerCase();
+  // Recherche montant exact ou partiel
+  const amtStr=t.amount.toFixed(2);
+  if(amtStr.includes(q)||amtStr.replace('.',',').includes(q)) return true;
+  // Recherche texte dans label, tiers, catégorie, note, ref
+  return [t.label,t.tiers,t.category,t.subcategory,t.note,t.ref]
+    .some(v=>v&&v.toLowerCase().includes(ql));
+}
+
+function lvSort(col){if(lvSortCol===col)lvSortAsc=!lvSortAsc;else{lvSortCol=col;lvSortAsc=(col==='date');}renderLv();}
 
 // ===== TRANSACTIONS CRUD =====
 function toggleRec(id){const t=S.transactions.find(x=>x.id===id);if(t){t.reconciled=!t.reconciled;if(t.reconciled)t.cleared=false;saveData();renderSidebar();const v=document.querySelector('.vw.act')?.id;if(v==='v-livres')renderLv();}}
@@ -3643,7 +3738,86 @@ function renderCatList(type,elId){const el=document.getElementById(elId);if(!el)
     </div>`;}).join(''):'<div class="es" style="padding:16px"><i class="ti ti-tag"></i><p>Aucune</p></div>';
 }
 
-function renderParams(){renderParamAccounts();renderCatLists();updateInfStats();refreshAllSel();}
+// ===== GESTION DES TIERS =====
+function _initTiers(){
+  // Construire S.tiers depuis les transactions si pas encore initialisé
+  if(!S.tiers){
+    const set=new Set(S.transactions.map(t=>t.tiers||t.label).filter(Boolean));
+    S.tiers=[...set].sort((a,b)=>a.localeCompare(b,'fr'));
+  }
+}
+
+function renderTiersList(){
+  _initTiers();
+  const q=(document.getElementById('tiers-search')?.value||'').toLowerCase();
+  const list=S.tiers.filter(t=>!q||t.toLowerCase().includes(q));
+  const el=document.getElementById('p-tiers-list');
+  if(!el)return;
+  if(!list.length){el.innerHTML='<div class="es" style="padding:20px"><p>Aucun tiers trouvé</p></div>';return;}
+  el.innerHTML=list.map(t=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--brd);background:var(--bg2);border-radius:6px;margin-bottom:4px">
+      <span style="flex:1;font-size:13px">${t}</span>
+      <button class="btn bgh bsm" onclick="openTierMo('${t.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn brd bsm" onclick="deleteTier('${t.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+function openTierMo(existing){
+  const val=existing||'';
+  const label=val?'Modifier le tiers':'Nouveau tiers';
+  const html=`<div class="mo open" id="mo-tier-edit" onclick="if(event.target===this)closeMo('mo-tier-edit')">
+    <div class="md" style="max-width:420px">
+      <div class="mt"><i class="ti ti-users"></i>${label}</div>
+      <div class="fg"><label class="fl">Nom du tiers</label>
+        <input type="text" class="fc" id="tier-edit-name" value="${val}" placeholder="Nom du tiers">
+      </div>
+      ${val?`<div style="font-size:11px;color:var(--txt3);margin-top:6px">Renommer mettra à jour toutes les opérations associées.</div>`:''}
+      <div class="mf">
+        <button class="btn bse" onclick="closeMo('mo-tier-edit')">Annuler</button>
+        <button class="btn bpr" onclick="saveTier('${val.replace(/'/g,"\\'")}')"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  document.getElementById('tier-edit-name')?.focus();
+}
+
+function saveTier(oldName){
+  const newName=(document.getElementById('tier-edit-name')?.value||'').trim();
+  if(!newName){toast('Nom vide','error');return;}
+  _initTiers();
+  if(oldName){
+    // Modification : mettre à jour la liste + toutes les transactions
+    const idx=S.tiers.indexOf(oldName);
+    if(idx>=0) S.tiers[idx]=newName; else S.tiers.push(newName);
+    S.transactions.forEach(t=>{
+      if((t.tiers||t.label)===oldName){t.tiers=newName;t.label=newName;}
+    });
+    toast('Tiers renommé et opérations mises à jour','success');
+  } else {
+    if(S.tiers.includes(newName)){toast('Ce tiers existe déjà','error');return;}
+    S.tiers.push(newName);
+    S.tiers.sort((a,b)=>a.localeCompare(b,'fr'));
+    toast('Tiers ajouté','success');
+  }
+  closeMo('mo-tier-edit');
+  saveData();
+  renderTiersList();
+}
+
+function deleteTier(name){
+  const used=S.transactions.some(t=>(t.tiers||t.label)===name);
+  const msg=used
+    ?`"${name}" est utilisé dans ${S.transactions.filter(t=>(t.tiers||t.label)===name).length} opération(s). Supprimer quand même ?`
+    :`Supprimer le tiers "${name}" ?`;
+  if(!confirm(msg))return;
+  _initTiers();
+  S.tiers=S.tiers.filter(t=>t!==name);
+  saveData();
+  renderTiersList();
+  toast('Tiers supprimé','success');
+}
+
+function renderParams(){_initTiers();renderParamAccounts();renderCatLists();renderTiersList();updateInfStats();refreshAllSel();}
 
 // ===== MODALS =====
 function openMo(id){document.getElementById(id)?.classList.add('open');refreshAllSel();}
@@ -3767,13 +3941,6 @@ document.addEventListener('keydown', e => {
       if(id) delTx(id);
       return;
     }
-    // Touche F : focus recherche
-    if((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey){
-      e.preventDefault();
-      const si=document.getElementById('lv-search');
-      if(si){si.focus();si.select();}
-      return;
-    }
     // Touche N : nouvelle opération
     if(e.key === 'n' || e.key === 'N'){
       e.preventDefault();
@@ -3811,10 +3978,9 @@ loadData();  // charge localStorage d'abord (synchrone, immédiat)
 
 (async () => {
   // Charge depuis Google Drive si un fichier a déjà été sélectionné
-  if (driveHasFile()) {
-    await loadFromServer();
-    driveBackupNow(S).catch(()=>{}); // backup glissant de l'état initial, en arrière-plan
-  }
+  // Tente de charger depuis Drive (retrouve le fichier automatiquement si fileId perdu sur iOS)
+  const driveLoaded = await loadFromServer();
+  if (driveLoaded) driveBackupNow(S).catch(()=>{});
 
   lvBindClick();
   renderSidebar();
