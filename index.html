@@ -1030,6 +1030,8 @@ async function loadFromServer() {
       if (!S.echeances) S.echeances = [];
       try { localStorage.setItem('mf4', JSON.stringify(S)); } catch(e) {}
       updateSyncIndicator('ok');
+      // Différer la mise à jour de l'indicateur -lv au cas où _renderLvPage s'exécute après
+      setTimeout(()=>updateSyncIndicator(_syncState), 500);
       return true;
     }
   } catch(e) {
