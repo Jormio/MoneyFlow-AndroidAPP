@@ -1,8 +1,7 @@
 /* ===== MoneyFlow — Synchronisation Google Drive =====
    Remplace le serveur Python local (server.py) par un stockage
-   du fichier JSON existant sur Google Drive (ex: Comptes_Parents.json).
-   Nécessite : CLIENT_ID (OAuth2 Web) + API_KEY (pour le Picker).
-   À renseigner ci-dessous une fois créés dans Google Cloud Console.
+   du fichier JSON existant sur Google Drive.
+   CLIENT_ID et API_KEY configurés ci-dessous.
 */
 const DRIVE_CONFIG = {
   CLIENT_ID: '511188293229-ftulmn4212jiteq88fvdr2np707cqou7.apps.googleusercontent.com',
@@ -15,14 +14,69 @@ let _accessToken = null;
 let _tokenExpiry = 0;
 let _pickerLoaded = false;
 let _gisLoaded = false;
-let _fileId = localStorage.getItem('mf_drive_fileId') || null;
-let _fileName = localStorage.getItem('mf_drive_fileName') || 'Comptes_Parents.json';
+
+// ===== Persistance fileId : localStorage + cookie (iOS robustesse) =====
+function _readFileId() {
+  try {
+    const ls = localStorage.getItem('mf_drive_fileId');
+    if (ls) return ls;
+  } catch(e) {}
+  // Fallback cookie
+  const m = document.cookie.match(/mf_drive_fileId=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function _writeFileId(id) {
+  try { localStorage.setItem('mf_drive_fileId', id); } catch(e) {}
+  const exp = new Date(Date.now() + 365*24*3600*1000).toUTCString();
+  document.cookie = `mf_drive_fileId=${encodeURIComponent(id)};expires=${exp};path=/;SameSite=Strict`;
+}
+
+function _clearFileId() {
+  try { localStorage.removeItem('mf_drive_fileId'); } catch(e) {}
+  document.cookie = 'mf_drive_fileId=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+}
+
+function _readFileName() {
+  try {
+    const ls = localStorage.getItem('mf_drive_fileName');
+    if (ls) return ls;
+  } catch(e) {}
+  const m = document.cookie.match(/mf_drive_fileName=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : 'Comptes_Parents.json';
+}
+
+function _writeFileName(name) {
+  try { localStorage.setItem('mf_drive_fileName', name); } catch(e) {}
+  const exp = new Date(Date.now() + 365*24*3600*1000).toUTCString();
+  document.cookie = `mf_drive_fileName=${encodeURIComponent(name)};expires=${exp};path=/;SameSite=Strict`;
+}
+
+let _fileId = _readFileId();
+let _fileName = _readFileName();
+
+// Helpers cookies génériques pour d'autres clés (ex: backupFileId)
+function _readCookie(key) {
+  try { const ls = localStorage.getItem(key); if (ls) return ls; } catch(e) {}
+  const m = document.cookie.match(new RegExp(key + '=([^;]+)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function _writeCookie(key, val) {
+  try { localStorage.setItem(key, val); } catch(e) {}
+  const exp = new Date(Date.now() + 365*24*3600*1000).toUTCString();
+  document.cookie = `${key}=${encodeURIComponent(val)};expires=${exp};path=/;SameSite=Strict`;
+}
+function _clearCookie(key) {
+  try { localStorage.removeItem(key); } catch(e) {}
+  document.cookie = `${key}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+}
 
 function driveIsConfigured() {
   return !DRIVE_CONFIG.CLIENT_ID.startsWith('REMPLACER') && !DRIVE_CONFIG.API_KEY.startsWith('REMPLACER');
 }
 
 function driveHasFile() {
+  if (!_fileId) _fileId = _readFileId();
   return !!_fileId;
 }
 
@@ -50,11 +104,25 @@ async function _ensurePicker() {
   _pickerLoaded = true;
 }
 
+function _isSafariIOS() {
+  return /iP(hone|ad|od)/.test(navigator.userAgent) && /WebKit/.test(navigator.userAgent)
+    && !/CriOS/.test(navigator.userAgent) && !/FxiOS/.test(navigator.userAgent);
+}
+
 // Récupère un access token valide (silencieux si déjà accordé, sinon popup de consentement)
 function driveGetToken(interactive) {
   return new Promise(async (resolve, reject) => {
     try {
       await _ensureGis();
+      // Relire le token depuis cookie/localStorage si la variable mémoire est vide
+      if (!_accessToken || Date.now() >= _tokenExpiry - 30000) {
+        const savedToken = _readCookie('mf_drive_token');
+        const savedExpiry = parseInt(_readCookie('mf_drive_token_exp') || '0');
+        if (savedToken && Date.now() < savedExpiry - 30000) {
+          _accessToken = savedToken;
+          _tokenExpiry = savedExpiry;
+        }
+      }
       if (_accessToken && Date.now() < _tokenExpiry - 30000) { resolve(_accessToken); return; }
       if (!_gisTokenClient) {
         _gisTokenClient = google.accounts.oauth2.initTokenClient({
@@ -67,9 +135,14 @@ function driveGetToken(interactive) {
         if (resp.error) { reject(resp); return; }
         _accessToken = resp.access_token;
         _tokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+        // Persister le token pour éviter la popup au prochain démarrage
+        _writeCookie('mf_drive_token', _accessToken);
+        _writeCookie('mf_drive_token_exp', String(_tokenExpiry));
         resolve(_accessToken);
       };
-      _gisTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+      // Sur Safari iOS, forcer prompt='' pour éviter le blocage popup
+      const prompt = interactive && !_isSafariIOS() ? 'consent' : '';
+      _gisTokenClient.requestAccessToken({ prompt });
     } catch (e) { reject(e); }
   });
 }
@@ -92,8 +165,8 @@ async function driveOpenPicker() {
           const doc = data.docs[0];
           _fileId = doc.id;
           _fileName = doc.name;
-          localStorage.setItem('mf_drive_fileId', _fileId);
-          localStorage.setItem('mf_drive_fileName', _fileName);
+          _writeFileId(_fileId);
+          _writeFileName(_fileName);
           resolve({ fileId: _fileId, fileName: _fileName });
         } else if (data.action === google.picker.Action.CANCEL) {
           resolve(null);
@@ -104,18 +177,62 @@ async function driveOpenPicker() {
   });
 }
 
+// Recherche automatique du fichier par nom si fileId perdu (iOS PWA storage reset)
+async function driveFindFileByName(name) {
+  try {
+    const token = await driveGetToken(false);
+    const q = encodeURIComponent(`name='${name}' and trashed=false`);
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=5`, {
+      headers: { Authorization: 'Bearer ' + token },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (j.files && j.files.length > 0) {
+      const f = j.files[0];
+      _fileId = f.id;
+      _fileName = f.name;
+      _writeFileId(_fileId);
+      _writeFileName(_fileName);
+      console.log('Drive: fichier retrouvé automatiquement', f.name, f.id);
+      return f.id;
+    }
+  } catch(e) { console.warn('driveFindFileByName error', e); }
+  return null;
+}
+
+// Charge les données : si fileId perdu, tente de le retrouver par nom avant d'échouer
+async function driveLoadAuto() {
+  if (!_fileId) _fileId = _readFileId();
+  if (!_fileId) {
+    // Tenter de retrouver le fichier par son dernier nom connu
+    const lastName = _readFileName();
+    if (lastName) await driveFindFileByName(lastName);
+  }
+  if (!_fileId) return null;
+  return driveLoad();
+}
+
 // Lit le contenu JSON du fichier Drive sélectionné
 async function driveLoad(_attempt) {
   if (!_fileId) return null;
   const attempt = _attempt || 1;
-  const token = await driveGetToken(false);
   try {
+    // Forcer renouvellement du token si c'est un retry après 401
+    const token = await driveGetToken(false);
     const r = await fetch(`https://www.googleapis.com/drive/v3/files/${_fileId}?alt=media`, {
       headers: { Authorization: 'Bearer ' + token },
       signal: AbortSignal.timeout(60000)
     });
     if (!r.ok) {
       if (r.status === 404) driveForget();
+      if (r.status === 401 && attempt < 3) {
+        // Token expiré : invalider le token mémorisé et réessayer
+        _accessToken = null; _tokenExpiry = 0;
+        _clearCookie('mf_drive_token'); _clearCookie('mf_drive_token_exp');
+        await new Promise(res => setTimeout(res, 1000));
+        return driveLoad(attempt + 1);
+      }
       if ((r.status === 429 || r.status >= 500) && attempt < 4) {
         await new Promise(res => setTimeout(res, attempt * 3000));
         return driveLoad(attempt + 1);
@@ -154,6 +271,13 @@ async function driveSave(obj, _attempt) {
       window._driveLastError = `HTTP ${r.status} ${detail}`;
       console.warn('driveSave HTTP error', r.status, detail);
       if (r.status === 404) { driveForget(); return false; }
+      if (r.status === 401 && attempt < 3) {
+        // Token expiré : invalider et réessayer
+        _accessToken = null; _tokenExpiry = 0;
+        _clearCookie('mf_drive_token'); _clearCookie('mf_drive_token_exp');
+        await new Promise(res => setTimeout(res, 1000));
+        return driveSave(obj, attempt + 1);
+      }
       // Erreurs serveur transitoires (429 rate limit, 5xx) : retry avec backoff
       if ((r.status === 429 || r.status >= 500) && attempt < 4) {
         await new Promise(res => setTimeout(res, attempt * 3000));
@@ -175,12 +299,13 @@ async function driveSave(obj, _attempt) {
 
 function driveForget() {
   _fileId = null;
-  localStorage.removeItem('mf_drive_fileId');
-  localStorage.removeItem('mf_drive_fileName');
+  _clearFileId();
+  try { localStorage.removeItem('mf_drive_fileName'); } catch(e) {}
+  document.cookie = 'mf_drive_fileName=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
 }
 
 // ===== Backup glissant (un seul fichier, écrasé à chaque démarrage) =====
-let _backupFileId = localStorage.getItem('mf_drive_backupFileId') || null;
+let _backupFileId = _readCookie('mf_drive_backupFileId');
 
 function _backupName() {
   const base = _fileName.replace(/\.json$/i, '');
@@ -216,7 +341,7 @@ async function driveBackupNow(obj) {
     const token = await driveGetToken(false);
     if (!_backupFileId) {
       _backupFileId = await _findBackupFile(token);
-      if (_backupFileId) localStorage.setItem('mf_drive_backupFileId', _backupFileId);
+      if (_backupFileId) _writeCookie('mf_drive_backupFileId', _backupFileId);
     }
     const body = JSON.stringify(obj);
     if (_backupFileId) {
@@ -226,7 +351,7 @@ async function driveBackupNow(obj) {
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body, signal: AbortSignal.timeout(60000)
       });
-      if (r.status === 404) { _backupFileId = null; localStorage.removeItem('mf_drive_backupFileId'); return driveBackupNow(obj); }
+      if (r.status === 404) { _backupFileId = null; _clearCookie('mf_drive_backupFileId'); return driveBackupNow(obj); }
       return r.ok;
     } else {
       // Pas de backup existant : on le crée dans le même dossier que le fichier principal
@@ -243,7 +368,7 @@ async function driveBackupNow(obj) {
       if (!r.ok) return false;
       const j = await r.json();
       _backupFileId = j.id;
-      localStorage.setItem('mf_drive_backupFileId', _backupFileId);
+      _writeCookie('mf_drive_backupFileId', _backupFileId);
       return true;
     }
   } catch (e) { console.warn('driveBackupNow error', e); return false; }

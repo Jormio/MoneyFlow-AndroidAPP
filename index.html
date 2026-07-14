@@ -987,21 +987,23 @@ let _syncState = SYNC_STATE.idle;
 
 function updateSyncIndicator(state, detail){
   _syncState = state;
-  const icon = document.getElementById('sync-icon');
-  const label = document.getElementById('sync-label');
-  const wrap = document.getElementById('sync-indicator');
-  if(!icon||!label||!wrap) return;
   const cfg = {
-    idle:    { i:'☁️',  l:'—',           c:'var(--txt3)',   bg:'var(--bg3)' },
-    saving:  { i:'🔄',  l:'Sync…',       c:'var(--ac)',     bg:'rgba(79,142,247,.1)' },
-    ok:      { i:'✅',  l:'Synchronisé', c:'var(--gn)',     bg:'rgba(16,185,129,.1)' },
-    error:   { i:'⚠️', l:detail||'Erreur sync', c:'var(--rd)', bg:'rgba(220,38,38,.1)' },
-    offline: { i:'📵',  l:'Hors ligne',  c:'var(--am)',     bg:'rgba(245,158,11,.1)' },
-  }[state]||{i:'☁️',l:'—',c:'var(--txt3)',bg:'var(--bg3)'};
-  icon.textContent=cfg.i;
-  label.textContent=cfg.l;
-  label.style.color=cfg.c;
-  wrap.style.background=cfg.bg;
+    idle:    { i:'☁️',  l:'—',           c:'var(--txt3)',   bg:'var(--bg3)',           tip:'Synchronisation : en attente' },
+    saving:  { i:'🔄',  l:'Sync…',       c:'var(--ac)',     bg:'rgba(79,142,247,.1)',  tip:'Synchronisation en cours…' },
+    ok:      { i:'✅',  l:'Synchronisé', c:'var(--gn)',     bg:'rgba(16,185,129,.1)', tip:'Données synchronisées avec Google Drive' },
+    error:   { i:'⚠️', l:'Erreur',      c:'var(--rd)',     bg:'rgba(220,38,38,.1)',   tip:detail||'Échec de synchronisation — nouvelle tentative en cours' },
+    offline: { i:'📵',  l:'Hors ligne',  c:'var(--am)',     bg:'rgba(245,158,11,.1)', tip:'Pas de connexion — données sauvegardées localement' },
+  }[state]||{ i:'☁️', l:'—', c:'var(--txt3)', bg:'var(--bg3)', tip:'' };
+  ['sync-indicator'].forEach(wId=>{
+    const wrap=document.getElementById(wId);
+    if(!wrap) return;
+    const icon=wrap.querySelector('[id$="-icon"], #sync-icon');
+    const label=wrap.querySelector('[id$="-label"], #sync-label');
+    if(icon) icon.textContent=cfg.i;
+    if(label){label.textContent=cfg.l;label.style.color=cfg.c;}
+    wrap.style.background=cfg.bg;
+    wrap.title=cfg.tip;
+  });
 }
 // Le fichier JSON existant (ex: Comptes_Parents.json) est lu/écrit via l'API Drive v3.
 // Voir drive-sync.js pour driveLoad/driveSave/driveOpenPicker/driveHasFile/driveIsConfigured.
@@ -1392,7 +1394,7 @@ function toast(msg,type='info'){
   txt.textContent=msg; // textContent = no encoding issues
   el.appendChild(icon);el.appendChild(txt);
   t.appendChild(el);
-  setTimeout(()=>el.remove(),5000);
+  setTimeout(()=>el.remove(),2000);
 }
 function getAcc(id){return S.accounts.find(a=>a.id===id);}
 function catColor(n,type){
@@ -1432,7 +1434,8 @@ function showV(name){
   let extra='';
   if(name==='echeances')extra=`<button class="btn bpr bsm" onclick="openEchMo()"><i class="ti ti-plus"></i>Nouvelle \u00e9ch\u00e9ance</button>`;
   // livres: no extra buttons here \u2014 all in the single livres bar
-  tba.innerHTML=extra+`<button class="btn bgh bsm has-tip" onclick="saveData()" title="Sauvegarder les donnees"><i class="ti ti-device-floppy"></i></button><button class="btn bgh bsm has-tip" onclick="backupData()" title="Telecharger une sauvegarde JSON"><i class="ti ti-archive"></i></button>`;
+  tba.innerHTML=`<div id="sync-indicator" style="display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 7px;border-radius:12px;background:var(--bg3);cursor:default;flex-shrink:0"><span id="sync-icon" style="font-size:13px">☁️</span><span id="sync-label" style="color:var(--txt3)">—</span></div>`+extra+`<button class="btn bgh bsm has-tip" onclick="driveRefresh()" title="Rafraîchir depuis Google Drive"><i class="ti ti-refresh"></i></button><button class="btn bgh bsm has-tip" onclick="saveData()" title="Sauvegarder les donnees"><i class="ti ti-device-floppy"></i></button><button class="btn bgh bsm has-tip" onclick="backupData()" title="Telecharger une sauvegarde JSON"><i class="ti ti-archive"></i></button>`;
+  updateSyncIndicator(_syncState||'idle');
   ({livres:renderLv,echeances:renderEch,parametres:renderParams}[name]||(() => {}))();
 }
 
@@ -1564,13 +1567,7 @@ function navCatAC(e,pfx){
 }
 function refreshDataLists(){
   _initTiers();
-  const vals=new Set([
-    ...S.tiers,
-    ...S.transactions.map(t=>t.label).filter(Boolean),
-    ...S.transactions.map(t=>t.tiers).filter(Boolean),
-    ...S.echeances.map(e=>e.name).filter(Boolean),
-  ]);
-  const opts=[...vals].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}))
+  const opts=S.tiers.sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}))
     .map(v=>`<option value="${v}">`).join('');
   document.querySelectorAll('.mf-tiers-dl').forEach(dl=>dl.innerHTML=opts);
 }
@@ -1946,7 +1943,7 @@ function openTxMo(accId){
   document.getElementById('tx-date').value=new Date().toISOString().split('T')[0];if(accId)document.getElementById('tx-acc').value=accId;
   document.getElementById('tx-lbl').value='';document.getElementById('tx-amt').value='';document.getElementById('tx-type').value='debit';document.getElementById('tx-ref').value='';document.getElementById('tx-note').value='';const _h=document.getElementById('tx-autofill-hint');if(_h)_h.style.display='none';
   document.getElementById('tx-cat-input').value='';document.getElementById('tx-cat').value='';
-  onTxTypeChange();refreshTxCats();openMo('mo-tx');
+  onTxTypeChange();refreshTxCats();refreshDataLists();openMo('mo-tx');
   lvScrollTxId=null;
 }
 function saveTx(){
@@ -2014,6 +2011,8 @@ function saveTx(){
     const prev=S.recMemory[memKey]||{};
     S.recMemory[memKey]={label:tx.label,type:tx.type,category:tx.category||prev.category||'',subcategory:tx.subcategory||prev.subcategory||'',amount:prev.amount?Math.round((prev.amount*0.8+tx.amount*0.2)*100)/100:tx.amount,note:tx.note||prev.note||''};
   }
+  _initTiers();
+  if(label && !S.tiers.includes(label)){S.tiers.push(label);S.tiers.sort((a,b)=>a.localeCompare(b,'fr'));}
   saveData();closeMo('mo-tx');renderSidebar();const v=document.querySelector('.vw.act')?.id;if(v==='v-livres')renderLv();
   toast(id?'Modifi\u00e9e':'Ajout\u00e9e','success');
 }
@@ -2138,7 +2137,7 @@ function openEchMo(){
   const today=new Date().toISOString().split('T')[0];
   document.getElementById('ech-start').value=today;
   document.getElementById('ech-day').value=new Date().getDate();
-  onEchTypeChange();refreshEchCats();openMo('mo-ech');
+  onEchTypeChange();refreshEchCats();refreshDataLists();openMo('mo-ech');
 }
 function editEch(id){const e=S.echeances.find(x=>x.id===id);if(!e)return;
   if(document.getElementById('ech-from-gen').value!==id){
@@ -2192,6 +2191,8 @@ function saveEch(integrate=false){
   if(isTransfer&&(!destAccId||destAccId===document.getElementById('ech-acc').value)){toast('Sélectionnez un compte destinataire différent','error');return;}
   const ech={id:id||uid(),name,amount,type:isTransfer?'transfer':echType,accountId:document.getElementById('ech-acc').value,accountIdDest:isTransfer?destAccId:undefined,category:isTransfer?'Virement':document.getElementById('ech-cat').value,subcategory:isTransfer?'':document.getElementById('ech-sub')?.value||'',freq:document.getElementById('ech-freq').value,day,start,end:endVal,occurrences:occ||undefined,tiers:name,note:document.getElementById('ech-note').value,overrides:existing?.overrides||{},skipped:existing?.skipped||[]};
   if(id){const i=S.echeances.findIndex(e=>e.id===id);if(i>=0)S.echeances[i]=ech;}else S.echeances.push(ech);
+  _initTiers();
+  if(name && !S.tiers.includes(name)){S.tiers.push(name);S.tiers.sort((a,b)=>a.localeCompare(b,'fr'));}
   saveData();closeMo('mo-ech');renderEch();
   document.getElementById('ech-from-gen').value='';
   document.getElementById('ech-btn-integrate').style.display='none';
@@ -3754,12 +3755,46 @@ function renderTiersList(){
   const el=document.getElementById('p-tiers-list');
   if(!el)return;
   if(!list.length){el.innerHTML='<div class="es" style="padding:20px"><p>Aucun tiers trouvé</p></div>';return;}
-  el.innerHTML=list.map(t=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--brd);background:var(--bg2);border-radius:6px;margin-bottom:4px">
-      <span style="flex:1;font-size:13px">${t}</span>
-      <button class="btn bgh bsm" onclick="openTierMo('${t.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
-      <button class="btn brd bsm" onclick="deleteTier('${t.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
-    </div>`).join('');
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="tiers-select-all" onchange="tiersSelectAll(this.checked)"> Tout sélectionner
+      </label>
+      <button class="btn brd bsm" id="tiers-delete-sel" style="display:none" onclick="tiersDeleteSelected()"><i class="ti ti-trash"></i>Supprimer la sélection</button>
+    </div>
+    <div id="tiers-items">
+    ${list.map(t=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--brd);background:var(--bg2);border-radius:6px;margin-bottom:4px">
+        <input type="checkbox" class="tier-cb" value="${t.replace(/"/g,'&quot;')}" onchange="tiersUpdateDeleteBtn()">
+        <span style="flex:1;font-size:13px">${t}</span>
+        <button class="btn bgh bsm" onclick="openTierMo('${t.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
+        <button class="btn brd bsm" onclick="deleteTier('${t.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
+      </div>`).join('')}
+    </div>`;
+}
+function tiersSelectAll(checked){
+  document.querySelectorAll('.tier-cb').forEach(cb=>cb.checked=checked);
+  tiersUpdateDeleteBtn();
+}
+function tiersUpdateDeleteBtn(){
+  const n=document.querySelectorAll('.tier-cb:checked').length;
+  const btn=document.getElementById('tiers-delete-sel');
+  if(!btn)return;
+  btn.style.display=n>0?'':'none';
+  btn.innerHTML=`<i class="ti ti-trash"></i> Supprimer (${n})`;
+}
+function tiersDeleteSelected(){
+  const selected=[...document.querySelectorAll('.tier-cb:checked')].map(cb=>cb.value);
+  if(!selected.length)return;
+  const used=selected.filter(name=>S.transactions.some(t=>(t.tiers||t.label)===name));
+  let msg=`Supprimer ${selected.length} tiers ?`;
+  if(used.length) msg+=`\n⚠ ${used.length} sont utilisés dans des opérations.`;
+  if(!confirm(msg))return;
+  _initTiers();
+  S.tiers=S.tiers.filter(t=>!selected.includes(t));
+  saveData();
+  renderTiersList();
+  toast(selected.length+' tiers supprimés','success');
 }
 
 function openTierMo(existing){

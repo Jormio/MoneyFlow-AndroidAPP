@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneyflow-v34';
+const CACHE_NAME = 'moneyflow-v42';
 const SHELL_FILES = [
   './index.html',
   './manifest.json',
