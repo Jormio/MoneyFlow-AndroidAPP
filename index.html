@@ -1766,7 +1766,6 @@ function _renderLvPage(){
         ${_lvPeriods.length>1?`<span style="font-size:11px;color:var(--ac);font-weight:600;margin-left:6px">${_lvPeriods[lvPage]?.label||''}</span>`:''}
       </div>
       <div style="flex:1"></div>
-      <div id="sync-indicator-lv" style="display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 7px;border-radius:12px;background:var(--bg3);cursor:default;flex-shrink:0"><span id="sync-icon-lv">☁️</span><span id="sync-label-lv" style="color:var(--txt3)">—</span></div>
       <div class="sc lv-stat-hide" style="padding:6px 12px"><div class="sl">Solde de d\u00e9part</div><div style="font-size:13px;font-weight:700;color:${soldeDeb>=0?'var(--gn)':'var(--rd)'}">${fmt(soldeDeb)}</div></div>
       <div class="sc lv-stat-hide" style="padding:6px 12px"><div class="sl">D\u00e9bits</div><div style="font-size:13px;font-weight:700;color:var(--rd)">${fmt(totD)}</div></div>
       <div class="sc lv-stat-hide" style="padding:6px 12px"><div class="sl">Cr\u00e9dits</div><div style="font-size:13px;font-weight:700;color:var(--gn)">${fmt(totC)}</div></div>
