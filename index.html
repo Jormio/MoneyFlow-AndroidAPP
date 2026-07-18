@@ -1013,11 +1013,13 @@ function updateSyncIndicator(state, detail){
     error:   { i:'⚠️', l:'Erreur',      c:'var(--rd)',     bg:'rgba(220,38,38,.1)',   tip:detail||'Échec de synchronisation — nouvelle tentative en cours' },
     offline: { i:'📵',  l:'Hors ligne',  c:'var(--am)',     bg:'rgba(245,158,11,.1)', tip:'Pas de connexion — données sauvegardées localement' },
   }[state]||{ i:'☁️', l:'—', c:'var(--txt3)', bg:'var(--bg3)', tip:'' };
+  console.log('[sync]', state, 'ids trouvés:', !!document.getElementById('sync-indicator'), !!document.getElementById('sync-indicator-lv'));
   ['sync-indicator','sync-indicator-lv'].forEach(wId=>{
     const wrap=document.getElementById(wId);
     if(!wrap) return;
-    const icon=wrap.querySelector('[id$="-icon"], #sync-icon');
-    const label=wrap.querySelector('[id$="-label"], #sync-label');
+    const suffix = wId==='sync-indicator-lv' ? '-lv' : '';
+    const icon=document.getElementById('sync-icon'+suffix);
+    const label=document.getElementById('sync-label'+suffix);
     if(icon) icon.textContent=cfg.i;
     if(label){label.textContent=cfg.l;label.style.color=cfg.c;}
     wrap.style.background=cfg.bg;
