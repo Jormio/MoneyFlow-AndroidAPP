@@ -264,7 +264,6 @@ body.view-livres .topbar{display:none}
   /* Bandeau livre de compte : passe sur 2 lignes, masque save/backup déjà dans la topbar mobile */
   #v-livres > div:first-child { flex-wrap: wrap !important; overflow-x: visible !important;
     position: sticky !important; top: 0; z-index: 20;
-    padding-top: max(6px, env(safe-area-inset-top, 6px)) !important;
     padding-right: max(8px, env(safe-area-inset-right, 8px)) !important;
     padding-left: max(8px, env(safe-area-inset-left, 8px)) !important; }
   #v-livres #lv-search-bar { position: sticky !important; z-index: 19; top: 0; }
@@ -315,7 +314,9 @@ body.view-livres .topbar{display:none}
 /* Fallback hauteur pour Safari iOS qui gère mal dvh */
 @supports (-webkit-touch-callout: none) {
   body { height: -webkit-fill-available; }
-  #main { min-height: -webkit-fill-available; }
+  #main { min-height: -webkit-fill-available; padding-top: env(safe-area-inset-top, 0px); }
+  /* Compenser le safe-area-inset-top déjà ajouté sur #main pour éviter le double padding sur topbar */
+  .topbar { padding-top: 7px !important; }
   /* Modales : forcer scroll interne sur iOS */
   .md { -webkit-overflow-scrolling: touch; overflow-y: scroll !important; }
   /* Bottom nav : compenser la barre Safari en bas + safe-area */
