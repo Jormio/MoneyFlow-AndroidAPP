@@ -140,41 +140,61 @@ function driveGetToken(interactive) {
         _writeCookie('mf_drive_token_exp', String(_tokenExpiry));
         resolve(_accessToken);
       };
-      // Sur Safari iOS, forcer prompt='' pour éviter le blocage popup
+      // Paramètres OAuth obligatoires depuis le 16 nov 2026 (Google Picker API update)
+      // prompt=consent uniquement si interactif ET pas iOS (pour éviter popup systématique)
       const prompt = interactive && !_isSafariIOS() ? 'consent' : '';
-      _gisTokenClient.requestAccessToken({ prompt });
+      _gisTokenClient.requestAccessToken({ prompt, trigger_onepick: true });
     } catch (e) { reject(e); }
   });
 }
 
-// Ouvre le sélecteur Google Picker pour choisir le fichier JSON existant une seule fois
+// Sélection du fichier Drive par nom (remplace le Picker pour compatibilité iOS/PWA)
+// Le Picker est conservé comme fallback sur desktop uniquement
 async function driveOpenPicker() {
-  if (!driveIsConfigured()) { toast('Configurez CLIENT_ID et API_KEY dans drive-sync.js', 'error'); return; }
-  const token = await driveGetToken(true);
-  await _ensurePicker();
-  return new Promise((resolve) => {
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setIncludeFolders(true)
-      .setSelectFolderEnabled(false);
-    const picker = new google.picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(token)
-      .setDeveloperKey(DRIVE_CONFIG.API_KEY)
-      .setCallback((data) => {
-        if (data.action === google.picker.Action.PICKED) {
-          const doc = data.docs[0];
-          _fileId = doc.id;
-          _fileName = doc.name;
-          _writeFileId(_fileId);
-          _writeFileName(_fileName);
-          resolve({ fileId: _fileId, fileName: _fileName });
-        } else if (data.action === google.picker.Action.CANCEL) {
-          resolve(null);
-        }
-      })
-      .build();
-    picker.setVisible(true);
-  });
+  if (!driveIsConfigured()) { toast('Configurez CLIENT_ID et API_KEY dans drive-sync.js', 'error'); return null; }
+  // Sur iOS PWA : sélection par nom uniquement (pas de Picker)
+  if (_isSafariIOS()) return driveSelectByName();
+  // Sur desktop/Android : essayer le Picker, fallback par nom si échec
+  try {
+    const token = await driveGetToken(true);
+    await _ensurePicker();
+    return new Promise((resolve) => {
+      const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false);
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(DRIVE_CONFIG.API_KEY)
+        .setCallback((data) => {
+          if (data.action === google.picker.Action.PICKED) {
+            const doc = data.docs[0];
+            _fileId = doc.id;
+            _fileName = doc.name;
+            _writeFileId(_fileId);
+            _writeFileName(_fileName);
+            resolve({ fileId: _fileId, fileName: _fileName });
+          } else if (data.action === google.picker.Action.CANCEL) {
+            resolve(null);
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    });
+  } catch(e) {
+    console.warn('Picker indisponible, fallback sélection par nom', e);
+    return driveSelectByName();
+  }
+}
+
+// Sélection du fichier Drive par saisie du nom — sans Picker
+async function driveSelectByName() {
+  const name = prompt('Nom du fichier sur Google Drive :', _fileName || 'Comptes_Parents.json');
+  if (!name || !name.trim()) return null;
+  const found = await driveFindFileByName(name.trim());
+  if (found) return { fileId: _fileId, fileName: _fileName };
+  toast('Fichier "' + name.trim() + '" introuvable sur Drive', 'error');
+  return null;
 }
 
 // Recherche automatique du fichier par nom si fileId perdu (iOS PWA storage reset)

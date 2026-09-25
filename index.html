@@ -942,12 +942,19 @@ body.view-livres .topbar{display:none}
   <div class="md" style="max-width:520px">
     <div class="mt"><i class="ti ti-settings"></i>Connecter Google Drive</div>
     <p style="font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.5">
-      Sélectionnez le fichier <b>Comptes_Parents.json</b> sur votre Google Drive (dossier <b>Comptes</b>).
+      Entrez le nom exact du fichier sur votre Google Drive, ou utilisez le sélecteur de fichiers.
     </p>
+    <div class="fg" style="margin-bottom:8px">
+      <label class="fl">Nom du fichier</label>
+      <input type="text" class="fc" id="drive-file-name-input" placeholder="ex: Comptes_Parents.json">
+    </div>
     <div id="drive-current-file" style="font-size:11px;color:var(--txt3);margin-bottom:10px"></div>
-    <div class="mf" style="margin-top:8px">
-      <button class="btn bse" onclick="closeMo('mo-open-source')">Annuler</button>
-      <button class="btn bpr" onclick="changeDataFile()"><i class="ti ti-brand-google-drive"></i>Choisir le fichier</button>
+    <div class="mf" style="margin-top:8px;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn bse" style="flex:1" onclick="closeMo('mo-open-source')">Annuler</button>
+        <button class="btn bpr" style="flex:2" onclick="changeDataFileByName()"><i class="ti ti-search"></i>Rechercher par nom</button>
+      </div>
+      <button class="btn bgh" style="width:100%" onclick="changeDataFile()"><i class="ti ti-brand-google-drive"></i>Ouvrir le sélecteur Drive</button>
     </div>
   </div>
 </div>
@@ -1170,7 +1177,29 @@ async function changeDataFile() {
   } catch(e) { toast('Connexion Google annulée ou échouée', 'error'); }
 }
 
-function saveToFolder() { openMo('mo-open-source'); }
+async function changeDataFileByName() {
+  const name = document.getElementById('drive-file-name-input')?.value?.trim();
+  if (!name) { toast('Entrez un nom de fichier', 'error'); return; }
+  try {
+    const found = await driveFindFileByName(name);
+    if (found) {
+      toast('Fichier trouvé : ' + name, 'success');
+      await loadFromServer();
+      renderSidebar();
+      updatePersistUI();
+      closeMo('mo-open-source');
+    } else {
+      toast('Fichier "' + name + '" introuvable sur Drive', 'error');
+    }
+  } catch(e) { toast('Erreur de connexion Google Drive', 'error'); }
+}
+
+function saveToFolder() {
+  // Pré-remplir le champ avec le nom du fichier actuel
+  const input = document.getElementById('drive-file-name-input');
+  if (input) input.value = localStorage.getItem('mf_drive_fileName') || _readFileName() || '';
+  openMo('mo-open-source');
+}
 async function driveRefresh(){
   if(!driveHasFile()){toast('Aucun fichier Drive configuré','error');return;}
   toast('Rechargement depuis Google Drive…','info');
